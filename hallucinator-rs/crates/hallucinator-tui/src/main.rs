@@ -4,7 +4,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use std::io;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use clap::{Parser, Subcommand};
@@ -381,7 +381,7 @@ async fn main() -> anyhow::Result<()> {
     // Open DBLP database if configured (fall back to None if file missing or corrupt)
     let mut startup_warnings: Vec<String> = Vec::new();
     let mut startup_info: Vec<String> = Vec::new();
-    let dblp_offline_db: Option<Arc<Mutex<hallucinator_dblp::DblpDatabase>>> =
+    let dblp_offline_db: Option<Arc<hallucinator_dblp::DblpPool>> =
         if let Some(ref path) = dblp_offline_path {
             match backend::open_dblp_db(path) {
                 Ok(db) => {
@@ -405,7 +405,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Open ACL database if configured (fall back to None if file missing or corrupt)
-    let acl_offline_db: Option<Arc<Mutex<hallucinator_acl::AclDatabase>>> =
+    let acl_offline_db: Option<Arc<hallucinator_acl::AclPool>> =
         if let Some(ref path) = acl_offline_path {
             match backend::open_acl_db(path) {
                 Ok(db) => {
@@ -429,7 +429,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Open arXiv database if configured (fall back to None if file missing or corrupt)
-    let arxiv_offline_db: Option<Arc<Mutex<hallucinator_arxiv_offline::ArxivDatabase>>> =
+    let arxiv_offline_db: Option<Arc<hallucinator_arxiv_offline::ArxivPool>> =
         if let Some(ref path) = arxiv_offline_path {
             match backend::open_arxiv_db(path) {
                 Ok(db) => {
@@ -456,7 +456,7 @@ async fn main() -> anyhow::Result<()> {
     // Open IACR ePrint database if configured. The archive has no
     // online search API, so without a local index this backend never
     // registers — non-fatal if missing or corrupt.
-    let iacr_eprint_offline_db: Option<Arc<Mutex<hallucinator_iacr_eprint::IacrDatabase>>> =
+    let iacr_eprint_offline_db: Option<Arc<hallucinator_iacr_eprint::IacrPool>> =
         if let Some(ref path) = iacr_eprint_offline_path {
             match backend::open_iacr_eprint_db(path) {
                 Ok(db) => {
@@ -480,7 +480,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Open OpenAlex index if configured (fall back to None if missing or corrupt)
-    let openalex_offline_db: Option<Arc<Mutex<hallucinator_openalex::OpenAlexDatabase>>> =
+    let openalex_offline_db: Option<Arc<hallucinator_openalex::OpenAlexDatabase>> =
         if let Some(ref path) = openalex_offline_path {
             match backend::open_openalex_db(path) {
                 Ok(db) => {

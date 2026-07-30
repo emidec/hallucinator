@@ -644,10 +644,10 @@ async fn check(
                 path.display()
             );
         }
-        let db = hallucinator_dblp::DblpDatabase::open(path)?;
+        let pool = hallucinator_dblp::DblpPool::open(path)?;
 
         // Check staleness
-        if let Ok(staleness) = db.check_staleness(30)
+        if let Ok(staleness) = pool.check_staleness(30)
             && staleness.is_stale
         {
             let msg = if let Some(days) = staleness.age_days {
@@ -671,7 +671,7 @@ async fn check(
             writeln!(writer)?;
         }
 
-        Some(Arc::new(Mutex::new(db)))
+        Some(Arc::new(pool))
     } else {
         None
     };
@@ -685,7 +685,7 @@ async fn check(
                 path.display()
             );
         }
-        let db = hallucinator_acl::AclDatabase::open(path)?;
+        let db = hallucinator_acl::AclPool::open(path)?;
 
         if let Ok(staleness) = db.check_staleness(30)
             && staleness.is_stale
@@ -711,7 +711,7 @@ async fn check(
             writeln!(writer)?;
         }
 
-        Some(Arc::new(Mutex::new(db)))
+        Some(Arc::new(db))
     } else {
         None
     };
@@ -725,7 +725,7 @@ async fn check(
                 path.display()
             );
         }
-        let db = hallucinator_arxiv_offline::ArxivDatabase::open(path)
+        let db = hallucinator_arxiv_offline::ArxivPool::open(path)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         if let Ok(staleness) = db.staleness(30)
@@ -752,7 +752,7 @@ async fn check(
             writeln!(writer)?;
         }
 
-        Some(Arc::new(Mutex::new(db)))
+        Some(Arc::new(db))
     } else {
         None
     };
@@ -768,8 +768,8 @@ async fn check(
                 path.display()
             );
         }
-        let db = hallucinator_iacr_eprint::IacrDatabase::open(path)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let db =
+            hallucinator_iacr_eprint::IacrPool::open(path).map_err(|e| anyhow::anyhow!("{}", e))?;
 
         if let Ok(staleness) = db.staleness(30)
             && staleness.is_stale
@@ -795,7 +795,7 @@ async fn check(
             writeln!(writer)?;
         }
 
-        Some(Arc::new(Mutex::new(db)))
+        Some(Arc::new(db))
     } else {
         None
     };
@@ -836,7 +836,7 @@ async fn check(
             writeln!(writer)?;
         }
 
-        Some(Arc::new(Mutex::new(db)))
+        Some(Arc::new(db))
     } else {
         None
     };
