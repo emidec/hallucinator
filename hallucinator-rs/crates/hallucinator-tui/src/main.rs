@@ -269,6 +269,9 @@ async fn main() -> anyhow::Result<()> {
     if let Some(n) = cli.num_workers {
         config_state.num_workers = n.max(1);
     }
+    // Captured now (before `config_state` moves into `app.config_state`
+    // below) so the backend command loop can track it for pool resizing.
+    let startup_num_workers = config_state.num_workers;
 
     // SearxNG URL: only enabled if --searxng flag is set
     if cli.searxng {
@@ -383,7 +386,7 @@ async fn main() -> anyhow::Result<()> {
     let mut startup_info: Vec<String> = Vec::new();
     let dblp_offline_db: Option<Arc<hallucinator_dblp::DblpPool>> =
         if let Some(ref path) = dblp_offline_path {
-            match backend::open_dblp_db(path) {
+            match backend::open_dblp_db(path, config_state.num_workers) {
                 Ok(db) => {
                     startup_info.push(format!("DBLP offline DB loaded: {}", path.display()));
                     Some(db)
@@ -407,7 +410,7 @@ async fn main() -> anyhow::Result<()> {
     // Open ACL database if configured (fall back to None if file missing or corrupt)
     let acl_offline_db: Option<Arc<hallucinator_acl::AclPool>> =
         if let Some(ref path) = acl_offline_path {
-            match backend::open_acl_db(path) {
+            match backend::open_acl_db(path, config_state.num_workers) {
                 Ok(db) => {
                     startup_info.push(format!("ACL offline DB loaded: {}", path.display()));
                     Some(db)
@@ -431,7 +434,7 @@ async fn main() -> anyhow::Result<()> {
     // Open arXiv database if configured (fall back to None if file missing or corrupt)
     let arxiv_offline_db: Option<Arc<hallucinator_arxiv_offline::ArxivPool>> =
         if let Some(ref path) = arxiv_offline_path {
-            match backend::open_arxiv_db(path) {
+            match backend::open_arxiv_db(path, config_state.num_workers) {
                 Ok(db) => {
                     startup_info.push(format!("arXiv offline DB loaded: {}", path.display()));
                     Some(db)
@@ -458,7 +461,7 @@ async fn main() -> anyhow::Result<()> {
     // registers — non-fatal if missing or corrupt.
     let iacr_eprint_offline_db: Option<Arc<hallucinator_iacr_eprint::IacrPool>> =
         if let Some(ref path) = iacr_eprint_offline_path {
-            match backend::open_iacr_eprint_db(path) {
+            match backend::open_iacr_eprint_db(path, config_state.num_workers) {
                 Ok(db) => {
                     startup_info.push(format!("IACR ePrint offline DB loaded: {}", path.display()));
                     Some(db)
@@ -717,6 +720,12 @@ async fn main() -> anyhow::Result<()> {
     let mut cached_iacr_eprint_db = iacr_eprint_offline_db.clone();
     let mut cached_openalex_path = openalex_offline_path.clone();
     let mut cached_openalex_db = openalex_offline_db.clone();
+    // Tracks the worker count the offline DB pools were last sized for, so a
+    // num_workers change in the config screen (without a path change) still
+    // triggers a resize on the next batch — otherwise workers queue behind a
+    // stale, too-small pool and per-query averages in the activity panel
+    // balloon even though nothing individually got slower.
+    let mut cached_num_workers = startup_num_workers;
     let check_openalex_authors = cli.check_openalex_authors;
     tokio::spawn(async move {
         // Per-batch cancel token — cancelled when user requests stop
@@ -732,47 +741,56 @@ async fn main() -> anyhow::Result<()> {
                     // Fresh token for this batch
                     batch_cancel = CancellationToken::new();
 
-                    // If user changed the DBLP path in config, try to open the new DB
-                    if config.dblp_offline_path != cached_dblp_path {
+                    // Re-open whenever the path changed OR the worker count changed —
+                    // a pool sized for the old worker count queues workers on the new
+                    // (higher) count, inflating the activity panel's per-query average.
+                    let num_workers_changed = config.num_workers != cached_num_workers;
+
+                    // If user changed the DBLP path or worker count, (re)open the DB
+                    if config.dblp_offline_path != cached_dblp_path || num_workers_changed {
                         cached_dblp_path = config.dblp_offline_path.clone();
                         cached_dblp_db = if let Some(ref path) = cached_dblp_path {
-                            backend::open_dblp_db(path).ok()
+                            backend::open_dblp_db(path, config.num_workers).ok()
                         } else {
                             None
                         };
                     }
 
-                    // If user changed the ACL path in config, try to open the new DB
-                    if config.acl_offline_path != cached_acl_path {
+                    // If user changed the ACL path or worker count, (re)open the DB
+                    if config.acl_offline_path != cached_acl_path || num_workers_changed {
                         cached_acl_path = config.acl_offline_path.clone();
                         cached_acl_db = if let Some(ref path) = cached_acl_path {
-                            backend::open_acl_db(path).ok()
+                            backend::open_acl_db(path, config.num_workers).ok()
                         } else {
                             None
                         };
                     }
 
-                    // If user changed the arXiv path in config, try to open the new DB
-                    if config.arxiv_offline_path != cached_arxiv_path {
+                    // If user changed the arXiv path or worker count, (re)open the DB
+                    if config.arxiv_offline_path != cached_arxiv_path || num_workers_changed {
                         cached_arxiv_path = config.arxiv_offline_path.clone();
                         cached_arxiv_db = if let Some(ref path) = cached_arxiv_path {
-                            backend::open_arxiv_db(path).ok()
+                            backend::open_arxiv_db(path, config.num_workers).ok()
                         } else {
                             None
                         };
                     }
 
-                    // If user changed the IACR ePrint path in config, try to open the new DB
-                    if config.iacr_eprint_offline_path != cached_iacr_eprint_path {
+                    // If user changed the IACR ePrint path or worker count, (re)open the DB
+                    if config.iacr_eprint_offline_path != cached_iacr_eprint_path
+                        || num_workers_changed
+                    {
                         cached_iacr_eprint_path = config.iacr_eprint_offline_path.clone();
                         cached_iacr_eprint_db = if let Some(ref path) = cached_iacr_eprint_path {
-                            backend::open_iacr_eprint_db(path).ok()
+                            backend::open_iacr_eprint_db(path, config.num_workers).ok()
                         } else {
                             None
                         };
                     }
 
-                    // If user changed the OpenAlex path in config, try to open the new index
+                    // If user changed the OpenAlex path in config, try to open the new index.
+                    // No pool_size here — OpenAlexDatabase shares one Tantivy Index/IndexReader
+                    // across workers (both Send + Sync), so worker count doesn't apply.
                     if config.openalex_offline_path != cached_openalex_path {
                         cached_openalex_path = config.openalex_offline_path.clone();
                         cached_openalex_db = if let Some(ref path) = cached_openalex_path {
@@ -781,6 +799,8 @@ async fn main() -> anyhow::Result<()> {
                             None
                         };
                     }
+
+                    cached_num_workers = config.num_workers;
 
                     config.dblp_offline_path = cached_dblp_path.clone();
                     config.dblp_offline_db = cached_dblp_db.clone();
