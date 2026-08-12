@@ -705,6 +705,18 @@ async fn main() -> anyhow::Result<()> {
 
     app.backend_cmd_tx = Some(cmd_tx);
 
+    // Single-paper mode (`hallucinator-tui paper.pdf`) navigates straight to
+    // the Paper detail screen, skipping Screen::Queue entirely. Processing
+    // is otherwise manual-start (StartProcessing / 'r'), but that action is
+    // only handled when `screen == Screen::Queue` (see app/update.rs) — so
+    // without this, single-paper mode had no code path that ever called
+    // start_processing(), and the app just sat on an empty Paper screen
+    // forever (issue #305). Auto-start here instead: there's nothing to
+    // review in the queue when there's exactly one paper.
+    if app.single_paper_mode {
+        app.start_processing();
+    }
+
     // Spawn backend command listener
     let event_tx_for_backend = event_tx.clone();
     let mut cached_dblp_path = dblp_offline_path.clone();
