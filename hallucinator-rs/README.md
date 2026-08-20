@@ -104,9 +104,8 @@ hallucinator-cli update-acl acl.db
 
 # arXiv (~4GB download from Kaggle — needs a Kaggle API token in
 # KAGGLE_API_TOKEN or ~/.kaggle/access_token, or legacy
-# KAGGLE_USERNAME+KAGGLE_KEY / ~/.kaggle/kaggle.json credentials;
-# accept the dataset license once at
-# https://www.kaggle.com/datasets/Cornell-University/arxiv)
+# KAGGLE_USERNAME+KAGGLE_KEY / ~/.kaggle/kaggle.json credentials.
+# Dataset: https://www.kaggle.com/datasets/Cornell-University/arxiv)
 hallucinator-cli update-arxiv arxiv.db
 
 # Alternative: skip the download and point at an already-downloaded

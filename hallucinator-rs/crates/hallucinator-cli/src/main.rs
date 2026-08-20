@@ -2086,10 +2086,6 @@ async fn update_arxiv(
             let auth = download::load_credentials()?;
             println!("Authenticating to Kaggle with your {}", auth.kind());
             println!("Downloading Kaggle arxiv snapshot to: {}", dest.display());
-            println!(
-                "(If this is your first run, open https://www.kaggle.com/datasets/Cornell-University/arxiv\n\
-                 once in a browser and accept the dataset license.)"
-            );
             let bar = ProgressBar::new(0);
             bar.set_style(
                 ProgressStyle::with_template(

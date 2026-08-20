@@ -175,9 +175,9 @@ hallucinator-cli update-arxiv arxiv.db
    ```bash
    mkdir -p ~/.kaggle && printf '%s' 'KGAT_your_token_here' > ~/.kaggle/access_token && chmod 600 ~/.kaggle/access_token
    ```
-4. Open https://www.kaggle.com/datasets/Cornell-University/arxiv **once in a browser** and accept the dataset license (Kaggle returns 403 on first download otherwise)
-
 Already set up with the older credentials? They still work — `~/.kaggle/kaggle.json` and `KAGGLE_USERNAME` + `KAGGLE_KEY` are both still accepted, and Kaggle still issues them under **Legacy API Credentials**. Tokens win when both are present, so if a token is rejected, clear it to fall back. `update-arxiv` prints which credential it picked up before the download starts.
+
+If a download comes back 403, open https://www.kaggle.com/datasets/Cornell-University/arxiv once in a browser — some Kaggle datasets gate downloads behind accepting their terms. The arXiv snapshot currently doesn't, so a 403 is more likely a rejected credential.
 
 The full build takes ~10-20 minutes (download + ingest). If you already have the Kaggle zip or extracted JSON, point at it directly and skip the download:
 
