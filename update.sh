@@ -62,4 +62,8 @@ if require_disk 10 arxiv; then
   run arxiv update-arxiv ./arxiv.db
 fi
 
+if require_disk 20 openalex; then
+  run openalex update-openalex ./openalex.idx --min-year 2016
+fi
+
 echo "######## update run finished $(ts) ########"
