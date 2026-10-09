@@ -54,8 +54,14 @@ fi
 run iacr update-iacr-eprint ./iacr.db
 run acl  update-acl ./acl.db
 
+# dblp.org serves a bot-protection page to scripted downloads, so prefer a
+# dblp.xml.gz saved from a browser (https://dblp.uni-trier.de/xml/dblp.xml.gz).
 if require_disk 8 dblp; then
-  run dblp update-dblp ./dblp.db
+  if [[ -f ./dblp.xml.gz ]]; then
+    run dblp update-dblp ./dblp.db --from-file ./dblp.xml.gz
+  else
+    run dblp update-dblp ./dblp.db
+  fi
 fi
 
 if require_disk 10 arxiv; then

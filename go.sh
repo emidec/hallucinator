@@ -99,8 +99,8 @@ have_openalex_key() {
   return 1
 }
 
-if [[ -e ./openalex-index ]]; then
-  offline --openalex-offline ./openalex-index OpenAlex online
+if [[ -e ./openalex.idx ]]; then
+  offline --openalex-offline ./openalex.idx OpenAlex online
 elif have_openalex_key; then
   note_online OpenAlex
   echo "=== OK    OpenAlex: online, no local index (key found)"

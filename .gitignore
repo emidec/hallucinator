@@ -222,3 +222,4 @@ nul
 
 # Local config with API keys
 hallucinator.toml
+.hallucinator.toml
