@@ -223,3 +223,13 @@ nul
 # Local config with API keys
 hallucinator.toml
 .hallucinator.toml
+
+# Offline database files built by update.sh
+/acl.db
+/arxiv.db
+/arxiv.db-shm
+/arxiv.db-wal
+/iacr.db
+/openalex.idx/
+/arxiv-kaggle.zip
+/dblp.xml.gz
