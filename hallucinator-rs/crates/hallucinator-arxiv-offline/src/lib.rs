@@ -419,6 +419,23 @@ impl ArxivPool {
     }
 }
 
+/// Day number of 1970-01-01 in [`ymd_to_days`]'s count from 0000-03-01
+/// (Howard Hinnant's `civil_from_days` offset). The build stamp and the
+/// age check share it so they can't drift apart: the stamp used to be
+/// formatted in the CLI with a different constant, which dated every
+/// build 306 days early.
+const UNIX_EPOCH_DAYS: i64 = 719_468;
+
+/// Today's date as `YYYY-MM-DD` (UTC), for
+/// [`ArxivDatabase::record_build_date`].
+pub fn today_iso_date() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    days_to_iso((secs / 86_400) as i64)
+}
+
 /// Compute age in days between an ISO `YYYY-MM-DD` string and today.
 /// Returns `None` when the string can't be parsed — the caller treats
 /// that as "unknown age, don't warn".
@@ -436,7 +453,7 @@ fn iso_date_age_days(s: &str) -> Option<u64> {
         .ok()?
         .as_secs();
     let now_days = (now_secs / 86_400) as i64;
-    let epoch_days_to_then = then - 719_162; // days from year 0000 to 1970
+    let epoch_days_to_then = then - UNIX_EPOCH_DAYS;
     Some((now_days - epoch_days_to_then).max(0) as u64)
 }
 
@@ -457,6 +474,21 @@ fn ymd_to_days(year: i32, month: u32, day: u32) -> Option<i64> {
     let doy = (153 * m as u64 + 2) / 5 + (day as u64 - 1);
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     Some(era * 146097 + doe as i64)
+}
+
+/// Inverse of [`ymd_to_days`], taking a days-since-1970 count.
+fn days_to_iso(days_since_1970: i64) -> String {
+    let z = days_since_1970 + UNIX_EPOCH_DAYS;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{:04}-{:02}-{:02}", y, m, d)
 }
 
 #[cfg(test)]
@@ -514,5 +546,35 @@ mod tests {
         let newer = iso_date_age_days("2025-01-01").unwrap_or(0);
         assert!(older > newer, "older={older} newer={newer}");
         assert!(iso_date_age_days("not-a-date").is_none());
+    }
+
+    #[test]
+    fn ymd_to_days_matches_hinnant_anchors() {
+        // Pin day numbers to known dates so UNIX_EPOCH_DAYS can't drift.
+        assert_eq!(ymd_to_days(1970, 1, 1), Some(UNIX_EPOCH_DAYS));
+        assert_eq!(ymd_to_days(2000, 1, 1), Some(UNIX_EPOCH_DAYS + 10_957));
+        assert_eq!(ymd_to_days(2026, 7, 9), Some(UNIX_EPOCH_DAYS + 20_643));
+    }
+
+    #[test]
+    fn days_to_iso_inverts_ymd_to_days() {
+        assert_eq!(days_to_iso(0), "1970-01-01");
+        assert_eq!(days_to_iso(10_957), "2000-01-01");
+        assert_eq!(days_to_iso(20_643), "2026-07-09");
+    }
+
+    #[test]
+    fn build_date_age_round_trips() {
+        // Regression: the stamp and the age check used mismatched epoch
+        // constants, so a refresh was stamped 306 days early and a DB
+        // built 30 days ago read as 0 days old. Stamp today → 0 days;
+        // stamp 30 days back → exactly the stale threshold.
+        assert_eq!(iso_date_age_days(&today_iso_date()), Some(0));
+        let now_days = (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            / 86_400) as i64;
+        assert_eq!(iso_date_age_days(&days_to_iso(now_days - 30)), Some(30));
     }
 }

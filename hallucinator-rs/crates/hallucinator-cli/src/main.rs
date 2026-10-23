@@ -3166,7 +3166,7 @@ async fn update_arxiv(
     // partial builds get a timestamp so the staleness check has
     // something to compare against. (An explicit error-logged partial
     // ingest is better than a DB whose age says "never built".)
-    let today = format_today_iso();
+    let today = hallucinator_arxiv_offline::today_iso_date();
     if let Err(e) = db.record_build_date(&today) {
         eprintln!("warning: failed to record build_date: {e}");
     }
@@ -3249,34 +3249,6 @@ where
     }
     let reader = BufReader::with_capacity(1 << 20, file);
     ingest::ingest_jsonl(reader, progress_every, sink, progress)
-}
-
-/// Today's date as `YYYY-MM-DD` (UTC). Avoids pulling in chrono just
-/// for this one stamp — matches the simple formatter used by the
-/// update-dblp / update-acl commands.
-fn format_today_iso() -> String {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let days = secs / 86_400;
-    let (y, m, d) = days_to_ymd(days as i64 + 719_162);
-    format!("{:04}-{:02}-{:02}", y, m, d)
-}
-
-/// Inverse of `hallucinator_arxiv_offline::ymd_to_days` — good enough
-/// for human-readable build stamps.
-fn days_to_ymd(days: i64) -> (i32, u32, u32) {
-    let era = if days >= 0 { days } else { days - 146_096 } / 146_097;
-    let doe = (days - era * 146_097) as u64;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe as i64 + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-    (y as i32, m as u32, d as u32)
 }
 
 fn print_import_stats(stats: &hallucinator_local_corpus::ImportStats) {
