@@ -64,10 +64,16 @@ OFFLINE_DBS = [
 APA_RE = re.compile(
     r"^(?P<authors>.*?)\s*\((?P<year>\d{4}[a-z]?|n\.d\.)(?:,[^)]*)?\)\.?\s*(?P<rest>.+)$"
 )
-# A title ends at its first sentence-ending period. "?" doesn't end it, so
-# "Who Is AI Replacing? The Impact of ..." stays in one piece.
-PERIOD_RE = re.compile(r"(?<=[^\s.])\.(?=\s|$)")
-ABBREVIATIONS = {"vs", "e.g", "i.e", "U.S", "U.K", "St", "Dr", "Mr", "Mrs", "Ms", "No", "Vol"}
+# Where a sentence can end: ".", "?" or "!" before a space, not inside "...".
+BOUNDARY_RE = re.compile(r"(?<=[^\s.])[.?!](?=\s|$)")
+ABBREVIATIONS = {"vs", "e.g", "i.e", "U.S", "U.K", "St", "Dr", "Mr", "Mrs", "Ms", "No", "Vol",
+                 "vol", "pp", "al", "Ed", "Eds", "ed", "eds"}
+# Venue wording early in a sentence: "International Conference on ...",
+# "28th USENIX Security Symposium", "Advances in Neural ...".
+VENUE_WORDS_RE = re.compile(
+    r"(?i)\b(?:conference|symposium|workshop|proceedings|journal|transactions|meeting)\b"
+    r"|\badvances in\b"
+)
 INITIAL_RE = re.compile(r"[^\W\d_]{1,2}\.")  # "A.", "Th.", either half of "Y.-S."
 DOI_RE = re.compile(r"\b10\.\d{4,9}/\S+")
 ARXIV_RE = re.compile(
@@ -125,11 +131,42 @@ def parse_authors(text: str) -> list[tuple[str, str]]:
     return authors
 
 
+def looks_like_venue(text: str, after_period: bool) -> bool:
+    """Whether a sentence reads like where a work appeared, not more of its title.
+
+    An acronym opening the sentence ("EMNLP 2023", "IEEE ...", "MIT Press")
+    counts after a period. After a "?" it must stand alone ("NeurIPS 2023"),
+    since a subtitle can open with one too ("Who Is AI Replacing? AI and ...").
+    """
+    text = text.strip()
+    acronym = r"[A-Z][A-Za-z]*[A-Z]" + ("" if after_period else r"\w*(?:\s+(?:19|20)\d{2})?\W*$")
+    return bool(
+        re.match(r"(?i)in\s|arxiv\b", text)  # "In Proceedings of ...", "arXiv:2107.06018"
+        or VENUE_WORDS_RE.search(" ".join(text.split()[:5]))
+        or re.match(acronym, text)
+        or re.search(r"\b\d+\s*\(\d+\)", text)  # volume(issue), as in "71(10)"
+    )
+
+
 def split_title(rest: str) -> tuple[str, str]:
-    """'Title. Venue. URL' -> ('Title', 'Venue. URL')"""
-    for m in PERIOD_RE.finditer(rest):
-        if rest[: m.start()].rsplit(None, 1)[-1] not in ABBREVIATIONS:
-            return rest[: m.start()], rest[m.end():].strip()
+    """'Title. Venue. URL' -> ('Title', 'Venue. URL')
+
+    The title ends at whichever of its next two sentence boundaries is
+    followed by a venue. That lets a "?" end it ("Are Diffusion Models
+    Vulnerable to ...? International Conference ...") and a period sit inside
+    it ("This Person (Probably) Exists. Identity ... Faces. arXiv:..."), while
+    "Who Is AI Replacing? The Impact of ..." stays whole. Failing that, it
+    ends at the first period.
+    """
+    ends = [m for m in BOUNDARY_RE.finditer(rest)
+            if rest[: m.start()].rsplit(None, 1)[-1] not in ABBREVIATIONS]
+    for i, m in enumerate(ends[:2]):
+        following = rest[m.end(): ends[i + 1].start() if i + 1 < len(ends) else len(rest)]
+        if looks_like_venue(following, after_period=m[0] == "."):
+            return rest[: m.start() if m[0] == "." else m.end()], rest[m.end():].strip()
+    period = next((m for m in ends if m[0] == "."), None)
+    if period:
+        return rest[: period.start()], rest[period.end():].strip()
     return rest, ""
 
 
